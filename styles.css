@@ -1,0 +1,8 @@
+/* Basic styles for OTDAISURFER */
+:root{--bg:#0f1720;--card:#0b1220;--accent:#52b788;--text:#e6eef8}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,var(--bg),#071021);color:var(--text)}
+main{max-width:720px;padding:32px;border-radius:12px;background:rgba(255,255,255,0.03);box-shadow:0 6px 30px rgba(2,6,23,0.6);text-align:center}
+h1{margin:0 0 8px;font-size:2.4rem;color:var(--accent)}
+p{margin:0.5rem 0;color:rgba(230,238,248,0.9)}
+footer{margin-top:18px;font-size:0.85rem;opacity:0.8}
