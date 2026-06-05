@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net default catch-all denying everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable, hardened global helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Rules for "users" collection
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId)
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.email is string
+                    && request.resource.data.email.size() <= 256;
+      allow update: if isOwner(userId)
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.email == resource.data.email
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'createdAt', 'userId']);
+      allow delete: if false; // Deny user deletion
+    }
+
+    // Rules for Keep-styled "notes" collection
+    match /notes/{noteId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn()
+                    && isValidId(noteId)
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() <= 1000
+                    && request.resource.data.content is string
+                    && request.resource.data.content.size() <= 20000;
+
+      allow update: if isSignedIn()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() <= 1000
+                    && request.resource.data.content is string
+                    && request.resource.data.content.size() <= 20000
+                    && request.resource.data.diff(resource.data).affectedKeys().hasAny(['title', 'content', 'color', 'updatedAt']);
+
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

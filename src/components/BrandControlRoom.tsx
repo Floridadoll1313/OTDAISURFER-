@@ -31,6 +31,7 @@ import {
 import { BRAND_ASSETS } from '../data';
 import { sendSlackMessage, getSavedSimulations, saveSimulations } from '../slack';
 import { SlackNotification } from '../types';
+import GoogleWorkspaceControl from './GoogleWorkspaceControl';
 
 const INTEGRATION_KEYS = [
   {
@@ -385,6 +386,15 @@ export default function BrandControlRoom({ onSwitchToWebsite }: BrandControlRoom
             <ExternalLink className="w-3.5 h-3.5 text-black" />
           </button>
         </div>
+      </div>
+
+      {/* Google Workspace & persistent database nodes */}
+      <div className="space-y-4">
+        <div className="border-l-2 border-editorial-accent pl-4">
+          <h3 className="font-display font-black text-xl tracking-widest text-white uppercase">WORKSPACE SYNCHRONIZATION CENTER</h3>
+          <p className="text-zinc-400 text-xs font-sans">Active operational intelligence panel linking Google Services and Firebase persistence.</p>
+        </div>
+        <GoogleWorkspaceControl />
       </div>
 
       {/* Grid of Strategy Information */}

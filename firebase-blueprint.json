@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Information about an authenticated user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The unique Google/Firebase UID."
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user was registered."
+        }
+      },
+      "required": ["userId", "email"]
+    },
+    "Note": {
+      "title": "Synced Keep Note",
+      "description": "Strategic notes synchronized with Google Keep or authored locally.",
+      "type": "object",
+      "properties": {
+        "noteId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["noteId", "userId", "title", "content"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User registers"
+    },
+    "notes/{noteId}": {
+      "schema": "Note",
+      "description": "Google Keep synced notes collection"
+    }
+  }
+}
