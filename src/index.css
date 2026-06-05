@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;400;500;600;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  --color-editorial-bg: #020B14;
+  --color-editorial-accent: #00F0FF;
+  --color-editorial-border: rgba(255, 255, 255, 0.1);
+  --color-editorial-muted: rgba(255, 255, 255, 0.4);
+  --color-editorial-dark: #000307;
+
+  --color-wave-50: #f0fdfa;
+  --color-wave-100: #ccfbf1;
+  --color-wave-200: #99f6e4;
+  --color-wave-500: #00F0FF;
+  --color-wave-600: #00b0cc;
+  --color-wave-950: #01121f;
+
+  --color-tide-50: #f0f9ff;
+  --color-tide-100: #e0f2fe;
+  --color-tide-600: #0284c7;
+  --color-tide-800: #075985;
+  --color-tide-950: #011624;
+}
+
+body {
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  background-color: #020B14;
+  color: #f1f5f9;
+}
+
+/* Custom Scrollbar for iframe/browser sims matching Editorial Aesthetic */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020B14;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #00F0FF;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ffffff;
+}
+
+/* Outline Text Effect from standard design specifications */
+.editorial-outline-text {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.85);
+}
+
+.editorial-outline-text-accent {
+  color: transparent;
+  -webkit-text-stroke: 1px #00F0FF;
+}
+
+/* Wave Background Animation effect */
+@keyframes wave-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.wave-animate-bg {
+  background-size: 200% 200%;
+  animation: wave-flow 15s ease infinite;
+}
+

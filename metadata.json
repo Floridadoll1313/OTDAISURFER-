@@ -1,0 +1,6 @@
+{
+  "name": "Ocean Tide Drop AI Surfer Hub",
+  "description": "Brand strategy platform showcasing the OTDAISurfer.surf primary company presence and OceanTideDropAISurfer.services lead generation and AI consulting engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
