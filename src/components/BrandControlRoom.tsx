@@ -18,11 +18,232 @@ import {
   Settings,
   Trash2,
   RefreshCw,
-  Sliders
+  Sliders,
+  Key,
+  ShieldAlert,
+  Database,
+  Cpu,
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { BRAND_ASSETS } from '../data';
 import { sendSlackMessage, getSavedSimulations, saveSimulations } from '../slack';
 import { SlackNotification } from '../types';
+
+const INTEGRATION_KEYS = [
+  {
+    key: 'VITE_STRIPE_PUBLISHABLE_KEY',
+    name: 'Stripe Publishable Key',
+    envName: 'STRIPE_PUBLISHABLE_KEY / VITE_STRIPE_PUBLISHABLE_KEY',
+    category: 'Finance',
+    why: 'Enables client-side security mapping during payment checkout procedures. Exposes no monetary processing power.',
+    outcome: 'Triggers instant client-side card/digital-wallet input fields and secures 3D-Secure secondary validation.',
+    steps: [
+      'Navigate to your Stripe Dashboard (dashboard.stripe.com).',
+      'Go to Developers > API Keys in the top right menu.',
+      'Locate the "Publishable key" in the Standard keys grid and copy the text starting with "pk_live_...".'
+    ],
+    risk: 'Low. This is fully public and intended to be visible in your build. It binds checkout flows tightly to your verified domains to prevent spoofing.'
+  },
+  {
+    key: 'VITE_STRIPE_SECRET_KEY',
+    name: 'Stripe Secret Key',
+    envName: 'STRIPE_SECRET_KEY / STRIPE_API_KEY',
+    category: 'Finance',
+    why: 'Communicates directly with Stripe REST engines to process transactions, inspect accounts, and issue premium subscriptions.',
+    outcome: 'Automates customer billing, processes refunds, and registers web subscription completions securely.',
+    steps: [
+      'Navigate to your Stripe Dashboard (dashboard.stripe.com).',
+      'Go to Developers > API Keys.',
+      'Under Standard keys, click on "Reveal live key" in the Secret key line item to copy your secure server seed.'
+    ],
+    risk: 'Critical. KEEP STRICTLY CONFIDENTIAL. Exposure permits malicious actors to initiate unauthorized refunds or inspect cash registers.'
+  },
+  {
+    key: 'VITE_STRIPE_RESTRICTED_KEY',
+    name: 'Stripe Restricted Key',
+    envName: 'STRIPE_RESTRICTED_KEY',
+    category: 'Finance',
+    why: 'Allows hyper-targeted, fine-grained permission bounds (e.g., READ ONLY access to billing charts) to minimize risk.',
+    outcome: 'Loads live telemetry stats in the brand room without granting general write commands over your main Stripe balance.',
+    steps: [
+      'Navigate to dashboard.stripe.com > Developers > API Keys.',
+      'Move to Restricted keys and click "Create restricted key".',
+      'Define exact Read permissions for charges and billing telemetry, then generate.'
+    ],
+    risk: 'High. Designed as a security shield. This key should be scoped to the absolute bare minimum needed for visual reports.'
+  },
+  {
+    key: 'VITE_STRIPE_WEBHOOK_SECRET',
+    name: 'Stripe Webhook Signing Secret',
+    envName: 'STRIPE_WEBHOOK_SECRET',
+    category: 'Finance',
+    why: 'Cryptographically verifies that digital invoices arriving at your endpoint originate genuinely from Stripe servers.',
+    outcome: 'Defends your lead metrics system from hacker injection, block-chain tampering, and client-side invoice faking.',
+    steps: [
+      'Go to dashboard.stripe.com > Developers > Webhooks.',
+      'Configure or select your active webhook URL endpoint.',
+      'Under the "Signing secret" sub-section, click "Reveal" to extract the key beginning with "whsec_...".'
+    ],
+    risk: 'High. Keep strictly server-bound. Webhook faking can mock artificial payouts in your metrics logs.'
+  },
+  {
+    key: 'VITE_GOOGLE_API_KEY',
+    name: 'Google Places & Maps API Key',
+    envName: 'VITE_GOOGLE_API_KEY',
+    category: 'AI',
+    why: 'Empowers client-side map grids, geolocation indexing, address verification, automated ZIP lookups, and routing.',
+    outcome: 'Renders high-fidelity interactive map widgets and compiles coordinates of potential client branches seamlessly.',
+    steps: [
+      'Access Google Cloud Console (console.cloud.google.com).',
+      'Turn on "Maps JavaScript API" & "Places API" for your current workspace.',
+      'Go to APIs & Services > Credentials, click "Create Credentials > API Key", and copy the key beginning with "AIzaSy...".'
+    ],
+    risk: 'Medium. Intentionally public for maps rendering. Apply HTTP Referrer Restrictions in GCP dashboard to prevent scraping.'
+  },
+  {
+    key: 'VITE_OPENAI_API_KEY',
+    name: 'OpenAI Core API Key',
+    envName: 'OPENAI_API_KEY / VITE_OPENAI_API_KEY',
+    category: 'AI',
+    why: 'Powers natural language translations, text summaries, blog expansions, and lead metrics insights.',
+    outcome: 'Engages high-speed LLM processing to turn custom corporate questionnaires into comprehensive RFP specifications.',
+    steps: [
+      'Sign in to your OpenAI Developer Center (platform.openai.com).',
+      'Look under the Left Sidebar subsegment and select API Keys.',
+      'Click "+ Create new secret key", customize its name, and save the key starting with "sk-proj-...".'
+    ],
+    risk: 'High. Keep monthly expenditure allowances on OpenAI to prevent unpredictable over-billing if keys leak on public forums.'
+  },
+  {
+    key: 'VITE_OPENAI_AGENT_KEY',
+    name: 'OpenAI Agent Orchestration Key',
+    envName: 'OPENAI_AGENT_KEY',
+    category: 'AI',
+    why: 'Authorizes specialized autonomous business agents to navigate corporate structures and answer customer FAQs.',
+    outcome: 'Unlocks recursive assistant buffers which handle complex sales prompts with custom contextual instructions.',
+    steps: [
+      'Navigate to platform.openai.com/assistants.',
+      'Establish a separate assistant blueprint (e.g. OTD Lead Scout).',
+      'Authorize a dedicated API credential token restricted to agentic processing.'
+    ],
+    risk: 'High. Limit model temperature and set rigorous input limits to prevent expensive prompt loops.'
+  },
+  {
+    key: 'VITE_GITHUB_TOKEN',
+    name: 'GitHub Repository PAT Token',
+    envName: 'GITHUB_TOKEN',
+    category: 'DevOps',
+    why: 'Permits automated pipelines to fetch code modifications, synchronize branches, and verify staging status.',
+    outcome: 'Supports continuous container integration, updating pages right away when developers push commits to master.',
+    steps: [
+      'Go to github.com and enter Settings > Developer Settings > Personal Access Tokens > Fine-grained tokens.',
+      'Click "Generate new token", define access to target repositories, and specify "Read/Write Contents".',
+      'Copy the output token starting with "github_pat_...".'
+    ],
+    risk: 'High. Keep permissions narrowly restricted strictly to active OTD directories; do not configure read-all permissions.'
+  },
+  {
+    key: 'VITE_CLOUDFLARE_API_TOKEN',
+    name: 'Cloudflare Operations API Token',
+    envName: 'CLOUDFLARE_API_TOKEN',
+    category: 'DevOps',
+    why: 'Toggles real-time DNS configurations, controls Web Application Firewalls (WAF), and clears edge cache locks.',
+    outcome: 'Guarantees sub-second DNS updates and isolates server endpoints from DDoS attacks or botnet invasions.',
+    steps: [
+      'Access your Cloudflare Dashboard (dash.cloudflare.com).',
+      'Go to My Profile > API Tokens > Create Token.',
+      'Apply the "Edit Zone DNS" template, choose your target zone domain, and construct the key.'
+    ],
+    risk: 'Critical. Restrict write access strictly to specific domains, ensuring standard root routing structures are walled off.'
+  },
+  {
+    key: 'VITE_MCP_API_KEY',
+    name: 'Agentic Context Protocol Key (MCP)',
+    envName: 'MCP_API_KEY',
+    category: 'AI',
+    why: 'Integrates standalone operational AI modules and context scraper nodes into unified server layouts.',
+    outcome: 'Links client conversations directly with backend data lookups to automatically compile solutions.',
+    steps: [
+      'Log into your private Model Context Protocol management panel.',
+      'Select Client Identifiers and click "+ Create Token".',
+      'Specify API boundaries and grant tool execution privileges.'
+    ],
+    risk: 'High. Ensure MCP endpoints run within sandbox containers to prevent arbitary code executions on primary servers.'
+  },
+  {
+    key: 'VITE_SONAR_TOKEN',
+    name: 'SonarCloud / SonarQube Token',
+    envName: 'SONAR_TOKEN / SONAR_CLOUD',
+    category: 'Compliance',
+    why: 'Streams codebase health indicators on security, vulnerability, static test counts, and line duplication.',
+    outcome: 'Blocks code deployment if security levels fall below strict enterprise rating parameters (A-Grade).',
+    steps: [
+      'Access SonarCloud (sonarcloud.io) and sign in via GitHub.',
+      'Select your profile avatar page and go to My Account > Security page.',
+      'Enter a token name (e.g., OTD CI/CD Scanner) and click Generate; copy the string.'
+    ],
+    risk: 'Medium. Strictly used by continuous deployment runners to send telemetry reports. Expose only read-analysis flags.'
+  },
+  {
+    key: 'VITE_GITGUARDIAN_1',
+    name: 'GitGuardian Primary Security Key',
+    envName: 'GitGuardian / gitguardian',
+    category: 'Compliance',
+    why: 'Audits build steps to verify that no secret keys, databases passwords, or SSH seeds are committed to GitHub history.',
+    outcome: 'Erects an automated compliance curtain, ensuring complete company immunity to key-scraping internet crawler bots.',
+    steps: [
+      'Log into the GitGuardian Portal (dashboard.gitguardian.com).',
+      'Go to API Keys pane and click "+ Create API Key".',
+      'Enable repository scanning read scopes and duplicate to local configuration.'
+    ],
+    risk: 'High. Guard credentials cautiously, since compromised vulnerability scanners highlight exact points of security stress.'
+  },
+  {
+    key: 'VITE_RENDER_PUBLISHABLE_KEY',
+    name: 'Render Container Automator Key',
+    envName: 'Render_Publishable_key',
+    category: 'DevOps',
+    why: 'Controls microservice provisioning and reports server container resource health metrics.',
+    outcome: 'Performs automatic micro-rebuilds and restarts container clusters smoothly without taking down live services.',
+    steps: [
+      'Access your Render Portal (dashboard.render.com).',
+      'Click on Account Settings and navigate to the API Keys section.',
+      'Create a new token and copy the resulting string.'
+    ],
+    risk: 'High. This token manages the active hosting status. Limit deployment targets strictly to non-database servers.'
+  },
+  {
+    key: 'VITE_GRAFANA_KEY',
+    name: 'Grafana Cloud Telemetry Key',
+    envName: 'VITE_GRAFANA_KEY',
+    category: 'Compliance',
+    why: 'Streams memory traces, bandwidth spikes, page hits, and server response speeds directly to internal status feeds.',
+    outcome: 'Renders sleek, real-time performance graphs to your clients, proving our 99.99% uptime guarantees visually.',
+    steps: [
+      'Go to grafana.com and authenticate into Grafana Cloud.',
+      'Open Access Policies under your Cloud portal dashboard side-menu.',
+      'Generate a target reader token with telemetry metrics reading scopes enabled.'
+    ],
+    risk: 'Low. Since the key only permits read access to performance metrics, it presents no security threats to database assets.'
+  },
+  {
+    key: 'VITE_FIREBASE_APPLET_KEY',
+    name: 'Firebase AI Studio Applet Credential',
+    envName: 'FIREBASE_APPLET_KEY / VITE_FIREBASE_APPLET_KEY',
+    category: 'DevOps',
+    why: 'Authenticates data pipelines and connects custom applets with server-authoritative Firestore structures.',
+    outcome: 'Enables durable cloud persistence and secure authorization nodes to support client telemetry tracking files.',
+    steps: [
+      'Log into the AI Studio Applet settings console.',
+      'Navigate to the Developer Credentials or Firebase Synchronization plane.',
+      'Retrieve and extract the primary deployment token starting with "Ea7rEr..." to bind your application securely.'
+    ],
+    risk: 'High. Keep strictly server-bound or safe inside .env. Unauthorized access allows external users to manipulate your telemetry endpoints.'
+  }
+];
 
 interface BrandControlRoomProps {
   onSwitchToWebsite: (webId: 'primary' | 'secondary') => void;
@@ -31,6 +252,12 @@ interface BrandControlRoomProps {
 export default function BrandControlRoom({ onSwitchToWebsite }: BrandControlRoomProps) {
   const [selectedAsset, setSelectedAsset] = useState<'primary' | 'secondary'>('primary');
   const [showArchitectureHelp, setShowArchitectureHelp] = useState(false);
+
+  // Credentials Dashboard state
+  const [selectedKeyId, setSelectedKeyId] = useState<string>('VITE_STRIPE_PUBLISHABLE_KEY');
+  const [keySearchQuery, setKeySearchQuery] = useState<string>('');
+  const [keyCategoryFilter, setKeyCategoryFilter] = useState<'ALL' | 'Finance' | 'AI' | 'DevOps' | 'Compliance'>('ALL');
+  const [revealAllSecrets, setRevealAllSecrets] = useState<boolean>(false);
 
   // Slack state indicators (persisted to localStorage)
   const [webhookUrl, setWebhookUrl] = useState<string>(() => localStorage.getItem('otd_slack_webhook') || '');
@@ -832,7 +1059,312 @@ export default function BrandControlRoom({ onSwitchToWebsite }: BrandControlRoom
 
       </div>
 
-      {/* Domain mapping & SEO guide section */}
+      {/* Enterprise Credentials & API Integration Matrix */}
+      <div id="credentials-api-matrix" className="bg-editorial-dark border border-white/10 p-6 md:p-8 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div className="space-y-1">
+            <span className="inline-flex items-center gap-1.5 bg-zinc-805 text-editorial-accent px-2.5 py-1 text-[9px] font-mono font-bold tracking-widest uppercase border border-editorial-accent/30">
+              <Database className="w-3.5 h-3.5 text-editorial-accent" />
+              OTD INFRASTRUCTURE KEYS LOCKER
+            </span>
+            <h3 className="text-lg md:text-xl font-display font-black text-white uppercase tracking-wider flex items-center gap-2">
+              Corporate Key Register & API Security Matrix
+            </h3>
+            <p className="text-xs text-slate-400 font-sans">
+              Review live environmental credential states, operational loading reasoning, and direct business outcomes of every active component.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setRevealAllSecrets(!revealAllSecrets)}
+              className={`py-1.5 px-3 border font-mono text-[9px] tracking-widest uppercase transition-all cursor-pointer font-black flex items-center gap-1.5 ${
+                revealAllSecrets
+                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.1)]'
+                  : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-white hover:border-zinc-550'
+              }`}
+            >
+              {revealAllSecrets ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5" />
+                  Mask Confidential Keys
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5" />
+                  Reveal Secrets Raw
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Global Key Controller Action Panel */}
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-black/15 p-4 border border-white/5">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-1.5">
+            {(['ALL', 'Finance', 'AI', 'DevOps', 'Compliance'] as const).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setKeyCategoryFilter(cat)}
+                className={`px-3 py-1.5 border leading-none font-mono text-[9px] uppercase tracking-wider transition-all cursor-pointer ${
+                  keyCategoryFilter === cat
+                    ? 'bg-editorial-accent text-black border-editorial-accent font-black'
+                    : 'bg-zinc-850 hover:bg-zinc-800 text-slate-400 border-white/5 hover:text-white'
+                }`}
+              >
+                {cat === 'ALL' ? '🌎 Show All' : cat === 'Finance' ? '💳 Finance' : cat === 'AI' ? '🧠 AI Core' : cat === 'DevOps' ? '🔧 Pipeline' : '🛡️ Auditing'}
+              </button>
+            ))}
+          </div>
+
+          {/* Search bar */}
+          <div className="relative w-full md:w-72">
+            <input
+              type="text"
+              value={keySearchQuery}
+              onChange={(e) => setKeySearchQuery(e.target.value)}
+              placeholder="Search keys, values or codes..."
+              className="w-full bg-editorial-bg border border-white/10 px-3.5 py-2 pl-9 text-xs text-slate-200 focus:outline-none focus:border-editorial-accent transition-colors placeholder:text-slate-600 font-sans"
+            />
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+          </div>
+        </div>
+
+        {/* Main interactive directory system */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* List panel (Left Grid column) */}
+          <div className="lg:col-span-5 space-y-2 max-h-[500px] overflow-y-auto pr-1">
+            {INTEGRATION_KEYS.filter(item => {
+              const matchesFilter = keyCategoryFilter === 'ALL' || item.category === keyCategoryFilter;
+              const matchesSearch = item.name.toLowerCase().includes(keySearchQuery.toLowerCase()) || 
+                                    item.envName.toLowerCase().includes(keySearchQuery.toLowerCase());
+              return matchesFilter && matchesSearch;
+            }).length === 0 ? (
+              <div className="text-center py-12 border border-dashed border-white/5 text-slate-500 font-mono text-[10px] uppercase tracking-widest">
+                No active matching keys found.
+              </div>
+            ) : (
+              INTEGRATION_KEYS.filter(item => {
+                const matchesFilter = keyCategoryFilter === 'ALL' || item.category === keyCategoryFilter;
+                const matchesSearch = item.name.toLowerCase().includes(keySearchQuery.toLowerCase()) || 
+                                      item.envName.toLowerCase().includes(keySearchQuery.toLowerCase());
+                return matchesFilter && matchesSearch;
+              }).map((item) => {
+                const isLoaded = !!(import.meta as any).env[item.key];
+                const active = selectedKeyId === item.key;
+                
+                // Fetch dynamic display obfuscation
+                const rawVal = isLoaded ? String((import.meta as any).env[item.key]) : '';
+                let displayVal = 'Sandbox Mode Active';
+                if (isLoaded) {
+                  if (revealAllSecrets) {
+                    displayVal = rawVal;
+                  } else {
+                    displayVal = rawVal.length > 20 
+                      ? `${rawVal.slice(0, 10)}...${rawVal.slice(-10)}` 
+                      : '****************';
+                  }
+                }
+
+                return (
+                  <div
+                    key={item.key}
+                    onClick={() => setSelectedKeyId(item.key)}
+                    className={`p-3.5 border transition-all cursor-pointer flex flex-col justify-between gap-1.5 leading-snug hover:bg-white/5 ${
+                      active
+                        ? 'bg-editorial-bg border-editorial-accent'
+                        : 'bg-editorial-bg/60 border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-mono tracking-wider font-bold uppercase text-slate-500">
+                        {item.category}
+                      </span>
+                      <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 border ${
+                        isLoaded
+                          ? 'text-emerald-450 border-emerald-555/20 bg-emerald-500/5'
+                          : 'text-amber-455 border-amber-500/20 bg-amber-500/5'
+                      }`}>
+                        {isLoaded ? '🟢 DETECTED & ACTIVE' : '🟡 LOCAL SANDBOX'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <h4 className="text-xs font-display font-black text-white tracking-wide uppercase">
+                        {item.name}
+                      </h4>
+                      <code className="text-[9px] text-zinc-400 font-mono block break-all font-bold">
+                        {item.envName}
+                      </code>
+                    </div>
+
+                    <div className="pt-2 border-t border-white/5 flex items-center justify-between font-mono text-[9px]">
+                      <span className="text-slate-500">Value check:</span>
+                      <span className={`font-semibold tracking-wide ${isLoaded ? 'text-zinc-300' : 'text-amber-500/80'}`}>
+                        {displayVal}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Expanded details viewer (Right Column) */}
+          <div className="lg:col-span-7 bg-editorial-bg border border-white/10 p-5 md:p-7 space-y-6 flex flex-col justify-between">
+            {(() => {
+              const item = INTEGRATION_KEYS.find(x => x.key === selectedKeyId);
+              if (!item) return null;
+              
+              const isLoaded = !!(import.meta as any).env[item.key];
+              const rawVal = isLoaded ? String((import.meta as any).env[item.key]) : '';
+              let displayVal = 'Local Mock Sandbox Simulator seed active';
+              if (isLoaded) {
+                if (revealAllSecrets) {
+                  displayVal = rawVal;
+                } else {
+                  displayVal = rawVal.length > 20 
+                    ? `${rawVal.slice(0, 15)}...${rawVal.slice(-15)}` 
+                    : '****************';
+                }
+              }
+
+              return (
+                <div className="space-y-6 animate-fade-in flex-1 flex flex-col justify-between">
+                  {/* Item Header */}
+                  <div className="space-y-2 border-b border-white/10 pb-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-[10px] font-mono font-black text-editorial-accent uppercase tracking-widest bg-editorial-accent/10 border border-editorial-accent/30 px-2 py-0.5">
+                        {item.category} Registry Item
+                      </span>
+                      <span className={`text-[9px] font-mono uppercase tracking-wider font-bold px-2 py-0.5 border ${
+                        isLoaded
+                          ? 'bg-emerald-500/10 border-emerald-535/30 text-emerald-450'
+                          : 'bg-amber-500/10 border-amber-500/30 text-amber-450'
+                      }`}>
+                        Loaded State: {isLoaded ? 'VERIFIED ACTIVE IN CLIENT VITE BUILD' : 'FALLING BACK TO LOCAL DEMO SIMULATOR'}
+                      </span>
+                    </div>
+
+                    <h4 className="text-lg md:text-xl font-display font-black text-white uppercase tracking-wider">
+                      {item.name}
+                    </h4>
+                    <p className="text-[10px] text-zinc-550 font-mono uppercase font-black">
+                      System Environmental ID: <code className="text-white font-mono lowercase bg-black/20 border border-white/10 px-1">{item.key}</code>
+                    </p>
+                  </div>
+
+                  {/* Operational details tabs */}
+                  <div className="space-y-5 flex-1 py-2 overflow-y-auto max-h-[380px]">
+                    
+                    {/* Live Loaded Value Block */}
+                    <div className="space-y-2 bg-black/35 p-4 border border-white/5 relative">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-mono text-slate-400 block font-bold uppercase tracking-widest">
+                          Active Value Environment Value
+                        </span>
+                        {isLoaded && (
+                          <span className="text-[9.5px] font-mono text-emerald-400 flex items-center gap-1">
+                            <Lock className="w-3 h-3 text-emerald-400" /> Secure SSL Wire Loaded
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-mono text-xs text-white bg-editorial-dark border border-white/10 px-3 py-2.5 rounded-none break-all flex items-center justify-between select-all">
+                        <span>{displayVal}</span>
+                        {!revealAllSecrets && isLoaded && (
+                          <button
+                            type="button"
+                            onClick={() => setRevealAllSecrets(true)}
+                            className="text-[9px] uppercase tracking-wider text-editorial-accent font-sans hover:underline cursor-pointer"
+                          >
+                            reveal
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-zinc-400 font-sans leading-relaxed">
+                        {isLoaded 
+                          ? 'This is the genuine credential, dynamically loaded into the workspace from your configured .env file.'
+                          : 'No active environmental key was detected. The system is operating in Local Sandbox Simulation Mode, creating stable mock parameters.'}
+                      </p>
+                    </div>
+
+                    {/* Section: REASONING */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-mono text-slate-400 block font-bold uppercase tracking-widest flex items-center gap-1.5">
+                        <Cpu className="w-3.5 h-3.5 text-editorial-accent" />
+                        Aesthetic & Strategic Reasoning
+                      </span>
+                      <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                        {item.why}
+                      </p>
+                    </div>
+
+                    {/* Section: OUTCOME */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-mono text-slate-400 block font-bold uppercase tracking-widest flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-450" />
+                        Target Business Outcome
+                      </span>
+                      <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                        {item.outcome}
+                      </p>
+                    </div>
+
+                    {/* Section: RISK */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-mono text-slate-400 block font-bold uppercase tracking-widest flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+                        API Security & Exposure Audit
+                      </span>
+                      <p className="p-3 bg-white/5 border border-white/5 text-xs text-slate-300 leading-relaxed font-sans">
+                        {item.risk}
+                      </p>
+                    </div>
+
+                    {/* Section: PLAYBOOK RETRIEVAL GUIDE */}
+                    <div className="space-y-2.5 border-t border-white/5 pt-4">
+                      <span className="text-[10px] font-mono text-slate-400 block font-bold uppercase tracking-widest flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-blue-400" />
+                        Retrieval Playbook (Step-by-Step guide for Clients)
+                      </span>
+                      <ol className="space-y-2 text-xs text-slate-400 font-sans list-none pr-2">
+                        {item.steps.map((step, idx) => (
+                          <li key={idx} className="flex gap-2.5 items-start">
+                            <span className="font-mono text-[9px] w-5 h-5 rounded-none flex items-center justify-center bg-white/5 border border-white/10 font-bold text-white shrink-0 mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <span className="leading-snug">{step}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+
+                  </div>
+
+                  {/* Dynamic Action Instructions Footer */}
+                  <div className="pt-4 border-t border-white/10 text-xs text-slate-500 font-mono text-center flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <span>Selected: {item.name} Reference File</span>
+                    <a
+                      href="https://ai.studio/build"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-editorial-accent hover:underline flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold"
+                    >
+                      Configure Live Secrets Panel &rarr;
+                    </a>
+                  </div>
+
+                </div>
+              );
+            })()}
+          </div>
+
+        </div>
+      </div>
+
       <div className="p-6 bg-editorial-dark border border-white/10 space-y-4">
         <h3 className="text-sm font-display font-bold text-white uppercase tracking-[0.2em] flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-editorial-accent" />
