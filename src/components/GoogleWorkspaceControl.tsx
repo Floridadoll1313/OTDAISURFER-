@@ -4,22 +4,11 @@ import {
   getAccessToken, 
   logout, 
   initAuth,
-  db,
   handleFirestoreError,
   OperationType
 } from '../lib/firebase';
 import { User } from 'firebase/auth';
-import { 
-  collection, 
-  addDoc, 
-  deleteDoc, 
-  doc, 
-  onSnapshot,
-  query,
-  updateDoc,
-  where,
-  orderBy
-} from 'firebase/firestore';
+import { supabaseDb } from '../lib/supabase';
 import { 
   Mail, 
   Calendar, 
@@ -113,36 +102,33 @@ export default function GoogleWorkspaceControl() {
     }
   }, [user, accessToken, activeTab]);
 
-  // Firestore-backed Google Keep Sync
-  useEffect(() => {
+  // Supabase-backed Google Keep Sync with local mirror fallback
+  const fetchNotes = async () => {
     if (!user) {
       setNotes([]);
       return;
     }
-    const notesRef = collection(db, 'notes');
-    const q = query(
-      notesRef, 
-      where('userId', '==', user.uid)
-    );
+    try {
+      const fetched = await supabaseDb.getNotes(user.uid);
+      setNotes(fetched.map(n => ({
+        id: n.note_id || '',
+        title: n.title || '',
+        content: n.content || '',
+        color: n.color || '#1e1b4b',
+        createdAt: n.created_at || new Date().toISOString()
+      })));
+    } catch (err) {
+      console.error("Supabase Notes fetch error:", err);
+    }
+  };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched: KeepNote[] = [];
-      snapshot.forEach(docSnap => {
-        const d = docSnap.data();
-        fetched.push({
-          id: docSnap.id,
-          title: d.title || '',
-          content: d.content || '',
-          color: d.color || '#1e1b4b',
-          createdAt: d.createdAt
-        });
-      });
-      setNotes(fetched);
-    }, (error) => {
-      console.error("Firestore Notes subscription error:", error);
-    });
-
-    return () => unsubscribe();
+  useEffect(() => {
+    fetchNotes();
+    if (!user) return;
+    
+    // Periodically sync with database to mimic realtime updates
+    const interval = setInterval(fetchNotes, 4000);
+    return () => clearInterval(interval);
   }, [user]);
 
   const handleSignIn = async () => {
@@ -409,33 +395,34 @@ export default function GoogleWorkspaceControl() {
     }
   };
 
-  // Google Keep Note Sync (backed by rules-hardened Firestore collection)
+  // Google Keep Note Sync (backed by high-performance Supabase server nodes)
   const handleAddKeepNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNote.title || !newNote.content) return;
     if (!user) return;
 
     try {
-      const payload = {
-        userId: user.uid,
+      await supabaseDb.addNote({
+        note_id: 'note-' + Date.now(),
+        user_id: user.uid,
         title: newNote.title,
         content: newNote.content,
-        color: newNote.color,
-        createdAt: new Date().toISOString()
-      };
-      await addDoc(collection(db, 'notes'), payload);
+        color: newNote.color
+      });
       setNewNote({ title: '', content: '', color: '#1e1b4b' });
+      await fetchNotes();
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'notes');
+      console.error('Error adding Supabase note:', error);
     }
   };
 
   const handleDeleteKeepNote = async (noteId: string) => {
     if (!window.confirm("Delete this strategic Keep note?")) return;
     try {
-      await deleteDoc(doc(db, 'notes', noteId));
+      await supabaseDb.deleteNote(noteId, user?.uid || '');
+      await fetchNotes();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `notes/${noteId}`);
+      console.error('Error deleting Supabase note:', error);
     }
   };
 

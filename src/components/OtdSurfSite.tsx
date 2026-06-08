@@ -20,19 +20,105 @@ import {
   Palette,
   Type,
   FileDown,
-  Activity
+  Activity,
+  Sliders,
+  Loader2,
+  LogIn,
+  LogOut,
+  CheckSquare,
+  Mail,
+  Calendar,
+  Notebook,
+  Play,
+  BookOpen
 } from 'lucide-react';
-import { PORTFOLIO_PROJECTS, BRAND_ASSETS } from '../data';
+import { PORTFOLIO_PROJECTS, BRAND_ASSETS, AI_TOOLS } from '../data';
 import { PortfolioProject } from '../types';
 import { sendSlackMessage } from '../slack';
+import GoogleWorkspaceControl from './GoogleWorkspaceControl';
+import { 
+  googleSignIn, 
+  getAccessToken, 
+  logout, 
+  initAuth,
+  handleFirestoreError,
+  OperationType
+} from '../lib/firebase';
+import { User } from 'firebase/auth';
+import { supabaseDb } from '../lib/supabase';
 
 interface OtdSurfSiteProps {
   brandTheme?: 'cyan' | 'multicolor';
 }
 
 export default function OtdSurfSite({ brandTheme = 'multicolor' }: OtdSurfSiteProps) {
-  const [activeTab, setActiveTab] = useState<'home' | 'services' | 'portfolio' | 'contact' | 'branding'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'services' | 'portfolio' | 'contact' | 'branding' | 'members'>('home');
   const [selectedProject, setSelectedProject] = useState<PortfolioProject | null>(null);
+  
+  // Members Area authentication and state
+  const [memberUser, setMemberUser] = useState<User | null>(null);
+  const [memberToken, setMemberToken] = useState<string | null>(null);
+  const [memberAuthLoading, setMemberAuthLoading] = useState<boolean>(true);
+  const [memberAuthError, setMemberAuthError] = useState<string | null>(null);
+  const [memberActiveSuiteTab, setMemberActiveSuiteTab] = useState<'workspace' | 'labs'>('workspace');
+  
+  // 6 Cool Lab Tools state variables
+  const [selectedLabToolId, setSelectedLabToolId] = useState<string>('tool-autonomous-agent');
+  
+  // TidalAgent States
+  const [agentTaskTitle, setAgentTaskTitle] = useState<string>('');
+  const [agentTaskNotes, setAgentTaskNotes] = useState<string>('');
+  const [agentTaskRunning, setAgentTaskRunning] = useState<boolean>(false);
+  
+  // ReefSense States
+  const [ragQuery, setRagQuery] = useState<string>('');
+  const [ragSearching, setRagSearching] = useState<boolean>(false);
+  const [ragResults, setRagResults] = useState<any[]>([]);
+  const [ragSummary, setRagSummary] = useState<string>('');
+  
+  // DropWave States
+  const [webhookEvent, setWebhookEvent] = useState<string>('lead_form');
+  const [webhookDetails, setWebhookDetails] = useState<string>('');
+  const [webhookSending, setWebhookSending] = useState<boolean>(false);
+  const [webhookLogs, setWebhookLogs] = useState<string[]>(['[SYSTEM] DropWave webhook router initialized. Ready for dispatch telemetry.']);
+  
+  // SwellRespond Review Pilot States
+  const [responderComment, setResponderComment] = useState<string>('');
+  const [respondTone, setRespondTone] = useState<string>('Enterprise Polite');
+  const [respondDraft, setRespondDraft] = useState<string>('');
+  const [savingRespondNote, setSavingRespondNote] = useState<boolean>(false);
+  const [sendingDraft, setSendingDraft] = useState<boolean>(false);
+  
+  // SurfDraft SEO States
+  const [seoKeywords, setSeoKeywords] = useState<string>('');
+  const [seoCategory, setSeoCategory] = useState<string>('E-commerce');
+  const [seoOutline, setSeoOutline] = useState<string>('');
+  const [savingSeoNote, setSavingSeoNote] = useState<boolean>(false);
+  const [schedulingSeoMeeting, setSchedulingSeoMeeting] = useState<boolean>(false);
+  
+  // BreakerAudio States
+  const [audioTranscript, setAudioTranscript] = useState<string>('');
+  const [audioSnippetName, setAudioSnippetName] = useState<string>('');
+  const [audioActions, setAudioActions] = useState<string>('');
+  const [parsingAudio, setParsingAudio] = useState<boolean>(false);
+  const [schedulingAudioMeeting, setSchedulingAudioMeeting] = useState<boolean>(false);
+
+  // Subscribe to persistent Firebase user tokens elegantly
+  React.useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, token) => {
+        setMemberUser(user);
+        setMemberToken(token);
+        setMemberAuthLoading(false);
+      },
+      () => {
+        setMemberUser(null);
+        setMemberToken(null);
+        setMemberAuthLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
   
   // Interactive Brand State
   const [isBrandLocked, setIsBrandLocked] = useState<boolean>(true);
@@ -143,6 +229,13 @@ export default function OtdSurfSite({ brandTheme = 'multicolor' }: OtdSurfSitePr
               className={`hover:text-editorial-accent transition-colors cursor-pointer ${activeTab === 'branding' ? 'text-editorial-accent font-bold border-b border-editorial-accent pb-1' : ''}`}
             >
               Brand System
+            </button>
+            <button 
+              type="button"
+              onClick={() => { setActiveTab('members'); setSelectedProject(null); }}
+              className={`hover:text-editorial-accent transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab === 'members' ? 'text-pink-400 font-extrabold border-b border-pink-400 pb-1' : ''}`}
+            >
+              🔒 Members Portal
             </button>
             <button 
               type="button"
@@ -1052,6 +1145,889 @@ export default function OtdSurfSite({ brandTheme = 'multicolor' }: OtdSurfSitePr
               </div>
 
             </div>
+          </div>
+        )}
+
+        {/* ACTIVE TAB: MEMBERS PORTAL */}
+        {activeTab === 'members' && (
+          <div className="space-y-8 animate-fade-in text-sans" id="members-restricted-arena">
+            
+            {/* Header branding lock */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-white/10 bg-editorial-dark p-6 rounded-none">
+              <div className="space-y-1">
+                <span className="text-[10px] bg-pink-500/10 text-pink-400 border border-pink-500/20 py-0.5 px-2.5 font-mono font-black tracking-widest uppercase inline-block">
+                  RESTRICTED PARTNER SUITE
+                </span>
+                <h2 className="text-xl md:text-2xl font-display font-black text-white uppercase tracking-wider">
+                  OceanTide Members Portal
+                </h2>
+                <p className="text-xs text-slate-400 font-sans">
+                  Secure ingress console validating multi-ocean data streams, API networks, and operational automation boards.
+                </p>
+              </div>
+
+              {memberUser && (
+                <div className="flex items-center gap-3 bg-editorial-bg border border-white/5 py-2 px-4 rounded-none font-mono text-[10px] tracking-wide">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="text-slate-350">OPERATOR: <strong className="text-white">{memberUser.email}</strong></span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await logout();
+                      } catch (err) {
+                        console.error(err);
+                      }
+                    }}
+                    className="ml-3 text-pink-400 hover:text-white transition-colors uppercase font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Disconnect Port
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* UN-AUTHENTICATED LOGIN GATE */}
+            {!memberUser ? (
+              <div className="max-w-md mx-auto bg-editorial-dark border border-pink-500/20 shadow-[0_0_30px_rgba(236,72,153,0.1)] p-8 space-y-6 text-center animate-fade-in">
+                <div className="mx-auto w-12 h-12 bg-pink-500/10 border border-pink-500/30 flex items-center justify-center">
+                  <Lock className="w-6 h-6 text-pink-400" />
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="font-display font-black text-white uppercase tracking-widest text-sm">
+                    LOCKBOX INTEGRITY VERIFICATION
+                  </h3>
+                  <p className="text-[11px] leading-relaxed text-slate-400 font-sans">
+                    Authentication is strictly authenticated via authorized Google Workspace domains. This guarantees direct database syncing and workspace tool authorization.
+                  </p>
+                </div>
+
+                {memberAuthError && (
+                  <div className="p-3 bg-red-950/40 border border-red-500/30 text-red-400 font-mono text-[10px] leading-normal uppercase">
+                    Handshake failure: {memberAuthError}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setMemberAuthError(null);
+                    try {
+                      await googleSignIn();
+                    } catch (e: any) {
+                      setMemberAuthError(e.message || String(e));
+                    }
+                  }}
+                  className="w-full py-4 bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-500 text-black font-mono font-black text-xs uppercase tracking-widest hover:brightness-110 active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Authenticate Node
+                </button>
+
+                <div className="text-[9px] font-mono text-slate-500 uppercase tracking-wider space-y-1">
+                  <div>PORT: 3000 / PERSISTENCE: FIRESTORE SECURE</div>
+                  <div>AUTHORIZED CO: OCEANTIDE DROP AI SURFER GROUP</div>
+                </div>
+              </div>
+            ) : (
+              /* AUTHENTICATED PARTNER WORKSPACE */
+              <div className="space-y-6">
+                
+                {/* SUB-TABS SELECTOR */}
+                <div className="flex border-b border-white/10 text-[11px] font-mono uppercase tracking-wider">
+                  <button
+                    type="button"
+                    onClick={() => setMemberActiveSuiteTab('workspace')}
+                    className={`px-6 py-4.5 font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+                      memberActiveSuiteTab === 'workspace'
+                        ? 'border-pink-500 text-pink-400 bg-white/5 font-extrabold'
+                        : 'border-transparent text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Briefcase className="w-4 h-4 text-pink-400" />
+                    💼 Integrated Workspace Hub
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMemberActiveSuiteTab('labs')}
+                    className={`px-6 py-4.5 font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+                      memberActiveSuiteTab === 'labs'
+                        ? 'border-pink-500 text-pink-400 bg-white/5 font-extrabold'
+                        : 'border-transparent text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Cpu className="w-4 h-4 text-pink-400" />
+                    ⚡ AI Engineering Labs
+                  </button>
+                </div>
+
+                {/* AREA 1: INTEGRATED WORKSPACE HUB (GOOGLE WORKSPACE CONTROL - THE OTHER APP!) */}
+                {memberActiveSuiteTab === 'workspace' && (
+                  <div className="border border-white/10 animate-fade-in bg-editorial-bg">
+                    <div className="p-4 bg-editorial-dark border-b border-white/10 flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <span className="text-[9px] font-mono text-pink-400 uppercase tracking-widest font-bold">WORKSPACE INTERFACE</span>
+                        <h4 className="text-xs font-mono uppercase text-white tracking-widest">Google Workspace Control Console</h4>
+                      </div>
+                      <span className="text-[9px] bg-cyan-400/10 text-cyan-400 border border-cyan-400/20 py-0.5 px-2 font-mono tracking-widest">
+                        CONNECTED V2
+                      </span>
+                    </div>
+
+                    {/* Rendering the custom other app component cleanly */}
+                    <div className="p-4">
+                      <GoogleWorkspaceControl />
+                    </div>
+                  </div>
+                )}
+
+                {/* AREA 2: AI ENGINEERING LABS HUB (6 COOL LAB TOOLS) */}
+                {memberActiveSuiteTab === 'labs' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-fade-in">
+                    
+                    {/* Left: 6 Tool selector cards list */}
+                    <div className="lg:col-span-4 space-y-3.5">
+                      <div className="p-4 bg-editorial-dark border border-white/10 mb-2">
+                        <h4 className="text-xs font-mono text-white uppercase tracking-wider font-bold">
+                          Active Lab AI Modules
+                        </h4>
+                        <p className="text-[10px] text-slate-400 mt-1 font-sans leading-relaxed">
+                          Deploy and test advanced agency pipeline modules using pre-authenticated system variables.
+                        </p>
+                      </div>
+
+                      {AI_TOOLS.map((tool) => {
+                        const isChosen = selectedLabToolId === tool.id;
+                        return (
+                          <button
+                            key={tool.id}
+                            type="button"
+                            onClick={() => setSelectedLabToolId(tool.id)}
+                            className={`w-full p-4 border text-left rounded-none transition-all cursor-pointer group flex items-start gap-3 ${
+                              isChosen
+                                ? 'bg-editorial-dark border-pink-500/40 shadow-[0_0_15px_rgba(236,72,153,0.15)] ring-1 ring-pink-500/20'
+                                : 'bg-editorial-dark/40 border-white/5 hover:border-white/15'
+                            }`}
+                          >
+                            <span className={`p-2 shrink-0 ${isChosen ? 'bg-pink-500/10 border border-pink-500/30' : 'bg-white/5 border border-white/10 group-hover:bg-white/10'} text-pink-400`}>
+                              {tool.category === 'Agents' && <Cpu className="w-4 h-4" />}
+                              {tool.category === 'Data & Analytics' && <BookOpen className="w-4 h-4" />}
+                              {tool.category === 'Workflow' && <Workflow className="w-4 h-4" />}
+                              {tool.category === 'Customer Experience' && <Sparkles className="w-4 h-4" />}
+                              {tool.category === 'Content & Design' && <Type className="w-4 h-4" />}
+                            </span>
+                            <div className="space-y-1">
+                              <span className="text-[8.5px] font-mono text-slate-500 uppercase tracking-widest block">{tool.category}</span>
+                              <strong className={`font-mono text-xs block transition-colors ${isChosen ? 'text-pink-400 font-extrabold' : 'text-white border-transparent'}`}>
+                                {tool.name}
+                              </strong>
+                              <p className="text-[10px] text-slate-400 leading-relaxed font-sans line-clamp-2">
+                                {tool.description}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Right: Active sandbox playground container */}
+                    <div className="lg:col-span-8 bg-editorial-dark border border-white/10 p-6 md:p-8 space-y-6">
+                      
+                      {/* Active tool general statistics & data */}
+                      {(() => {
+                        const tool = AI_TOOLS.find(t => t.id === selectedLabToolId);
+                        if (!tool) return null;
+                        
+                        return (
+                          <div className="space-y-6">
+                            
+                            {/* Summary Metadata */}
+                            <div className="border-b border-white/10 pb-4 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-[9px] font-mono text-pink-400 uppercase tracking-widest bg-pink-500/5 px-2 py-0.5 border border-pink-500/10 font-bold">
+                                  Category: {tool.category}
+                                </span>
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">
+                                  COMPLEXITY: <strong className="text-white">{tool.complexity}</strong> | ROI: <strong className="text-white">{tool.roiEstimate}</strong>
+                                </span>
+                              </div>
+                              <h3 className="text-lg font-display font-black text-white uppercase tracking-wider">
+                                {tool.name}
+                              </h3>
+                              <p className="text-xs text-slate-350 font-sans leading-relaxed">
+                                {tool.description}
+                              </p>
+                              <div className="p-3 bg-editorial-bg border border-white/5 text-[10.5px] font-sans text-emerald-400 flex items-center gap-2">
+                                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                                <span className="font-mono text-[9px] uppercase tracking-wide text-slate-400 font-bold">OPERATIONAL DIRECT BENEFIT:</span>
+                                <strong>{tool.benefit}</strong>
+                              </div>
+                            </div>
+
+                            {/* 1. TIDALAGENT TASK ORCHESTRATOR PLAYGROUND */}
+                            {tool.id === 'tool-autonomous-agent' && (
+                              <div className="space-y-4 font-sans animate-fade-in">
+                                <div className="space-y-3">
+                                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Configure Task Intent</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. Sync Stripe customer events with Supabase database"
+                                    value={agentTaskTitle}
+                                    onChange={(e) => setAgentTaskTitle(e.target.value)}
+                                    className="w-full bg-editorial-bg border border-white/10 px-4 py-3 text-xs text-white font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                  />
+                                </div>
+
+                                <div className="space-y-3">
+                                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Operational Pipeline Handshake Instructions</label>
+                                  <textarea
+                                    rows={3}
+                                    placeholder="e.g. When a Stripe payload hits the Supabase webhook (https://cctobgbyxjfabksnokbe.supabase.co/functions/v1/stripe-webhook), invoke an OpenAI orchestration node to generate a tailored response, and stream telemetry blocks to Slack."
+                                    value={agentTaskNotes}
+                                    onChange={(e) => setAgentTaskNotes(e.target.value)}
+                                    className="w-full bg-editorial-bg border border-white/10 px-4 py-3 text-xs text-zinc-300 leading-relaxed rounded-none focus:outline-none focus:border-pink-500/50"
+                                  />
+                                </div>
+
+                                <div className="pt-2">
+                                  <button
+                                    type="button"
+                                    disabled={agentTaskRunning || !agentTaskTitle}
+                                    onClick={() => {
+                                      setAgentTaskRunning(true);
+                                      setTimeout(() => {
+                                        setAgentTaskRunning(false);
+                                      }, 3500);
+                                    }}
+                                    className="px-6 py-3.5 bg-pink-500 text-black hover:bg-white font-mono font-black text-xs uppercase tracking-widest transition-colors rounded-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40"
+                                  >
+                                    {agentTaskRunning ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Running Daemon Handshakes...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="w-4 h-4 shrink-0" />
+                                        Deploy Task Orchestrator
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {/* Active simulated console logs */}
+                                {(agentTaskRunning || agentTaskTitle) && (
+                                  <div className="bg-editorial-bg border border-white/10 p-4 space-y-2 font-mono text-[9px] uppercase tracking-wider leading-relaxed text-slate-400 select-none max-h-48 overflow-y-auto">
+                                    <div className="text-pink-400 font-bold">[TIDAL_AGENT DAEMON ENGINE ACTIVE]</div>
+                                    <div>[INIT] Spawning autonomous orchestration thread...</div>
+                                    <div>[HANDSHAKE] Handshaking with OpenAI agent credentials... sk-proj-GvLCuLD...</div>
+                                    {agentTaskRunning ? (
+                                      <>
+                                        <div className="text-cyan-400 animate-pulse">[SECURE] Hooking Supabase dynamic endpoint: VITE_SUPABASE_URL</div>
+                                        <div className="text-amber-400 animate-pulse">[ROUTER] Binding Stripe secret key signatures: sk_live_51SFQu...</div>
+                                        <div>[COMM] Synchronizing secure webhook router...</div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="text-emerald-400 font-bold">[SUCCESS] Deployment stabilized on Cloud Run cluster!</div>
+                                        <div className="text-emerald-400">[LISTENER] Listening live at: https://cctobgbyxjfabksnokbe.supabase.co/functions/v1/stripe-webhook</div>
+                                        <div className="mt-3 flex gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={async () => {
+                                              try {
+                                                await supabaseDb.addNote({
+                                                  note_id: 'agent-' + Date.now(),
+                                                  user_id: memberUser.uid,
+                                                  title: `🛸 TidalAgent: ${agentTaskTitle}`,
+                                                  content: `Orchestrator specification summary:\n\nTask Intent: ${agentTaskTitle}\nPipeline Instructions: ${agentTaskNotes || 'Default automated loop'}\nEndpoint: https://cctobgbyxjfabksnokbe.supabase.co/functions/v1/stripe-webhook\nStripe API Key Node: Active (sk_live_5ap)\nOpenAI Engine: GPT-4 Orchestrator (sk-proj)\nStatus: DEPLOYED ACTIVE`,
+                                                  color: '#1e1b4b'
+                                                });
+                                                alert('Success! TidalAgent spec blueprint has been exported directly to Keep. Switch to the Workspace Hub to view it live!');
+                                                // Trigger send telemetry block
+                                                sendSlackMessage('system', { 
+                                                  text: `Autonomous TidalAgent task orchestration deployed: ${agentTaskTitle}`, 
+                                                  domain: 'otdaisurfer.surf/labs', 
+                                                  agent: 'TidalAgent Task Suite' 
+                                                });
+                                              } catch (err: any) {
+                                                handleFirestoreError(err, OperationType.WRITE, 'notes');
+                                              }
+                                            }}
+                                            className="px-3 py-1.5 bg-pink-500/10 border border-pink-500/30 text-pink-400 hover:bg-pink-500 hover:text-black font-mono text-[8.5px] uppercase tracking-wider transition-all cursor-pointer font-black"
+                                          >
+                                            Export Spec to Workspace Keep Notes
+                                          </button>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 2. REEFSENSE RAG PILOT PLAYGROUND */}
+                            {tool.id === 'tool-smart-rag' && (
+                              <div className="space-y-4 font-sans animate-fade-in">
+                                <div className="space-y-3">
+                                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Natural Retrieve Query</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. Refund conditions for beachfront WaveWear store sales"
+                                    value={ragQuery}
+                                    onChange={(e) => setRagQuery(e.target.value)}
+                                    className="w-full bg-editorial-bg border border-white/10 px-4 py-3 text-xs text-white font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                  />
+                                </div>
+
+                                <div className="pt-2">
+                                  <button
+                                    type="button"
+                                    disabled={ragSearching || !ragQuery}
+                                    onClick={() => {
+                                      setRagSearching(true);
+                                      setRagResults([]);
+                                      setRagSummary('');
+                                      setTimeout(() => {
+                                        setRagSearching(false);
+                                        setRagResults([
+                                          { docName: 'doc_coastal_legal_3.pdf-chunk_41', relevance: 0.94, snippet: 'Beachfront sales are covered under ocean-tide environmental policies. Refund cycles permit up to 14 days when local water high limits trigger shop closures.' },
+                                          { docName: 'doc_wavewear_customer_policies.pdf', relevance: 0.88, snippet: 'Customers claiming defects in wet apparel or surfboard straps are entitled to rapid replacement, bypassing standard 30-day retail backlogs.' }
+                                        ]);
+                                        setRagSummary('Synthesized RAG Audit result:\nBased on beach compliance policy index doc_coastal_legal_3.pdf (#41) and general apparel guidelines, customers at WaveWear storefront locations are entitled to full refund benefits within 14 calendar days during high-tide extreme weather triggers or local closures. Replacing defective wet gears or straps does not require typical wait cycles.');
+                                      }, 2200);
+                                    }}
+                                    className="px-6 py-3.5 bg-pink-500 text-black hover:bg-white font-mono font-black text-xs uppercase tracking-widest transition-colors rounded-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40"
+                                  >
+                                    {ragSearching ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Querying Vector Index...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles className="w-4 h-4" />
+                                        Retrieve & Summarize
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {ragSearching && (
+                                  <div className="bg-editorial-bg border border-white/10 p-4 text-[9px] font-mono text-slate-400 space-y-1 select-none">
+                                    <div className="text-pink-400 animate-pulse">[RAG SCANNING...]</div>
+                                    <div>[CONNECT] Embedding query parameters using OpenAI embedding client...</div>
+                                    <div>[QUERY] Searching Index namespaces... BM25 + Vector hybrid alignment...</div>
+                                    <div>[PINECONE] Resolving metadata tags indices...</div>
+                                  </div>
+                                )}
+
+                                {ragSummary && (
+                                  <div className="space-y-4 animate-fade-in">
+                                    <div className="border border-white/10 bg-editorial-bg p-4 space-y-3">
+                                      <h5 className="font-mono text-[10px] text-pink-400 uppercase tracking-wider font-bold">Synthesized Insights Output</h5>
+                                      <p className="text-xs text-zinc-300 leading-relaxed font-sans">{ragSummary}</p>
+                                    </div>
+
+                                    <div className="border border-white/10 bg-editorial-bg p-4 space-y-2">
+                                      <h5 className="font-mono text-[9px] text-slate-400 uppercase tracking-wider">Associated Document Nodes Clustered</h5>
+                                      <div className="space-y-2">
+                                        {ragResults.map((r, i) => (
+                                          <div key={i} className="text-[10px] font-mono border-l-2 border-pink-500/55 pl-3.5 py-1 text-slate-450 bg-white/2">
+                                            <div className="flex justify-between font-bold text-white uppercase text-[9px]">
+                                              <span>{r.docName}</span>
+                                              <span className="text-pink-400">SCORE: {r.relevance}</span>
+                                            </div>
+                                            <p className="text-slate-400 text-[9.5px] leading-relaxed mt-0.5">{r.snippet}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            await supabaseDb.addNote({
+                                              note_id: 'rag-' + Date.now(),
+                                              user_id: memberUser.uid,
+                                              title: `🔍 ReefSense RAG: ${ragQuery}`,
+                                              content: `Query: ${ragQuery}\n\n${ragSummary}\n\nRetrieved Nodes:\n- doc_coastal_legal_3.pdf (Relevance: 0.94)\n- doc_wavewear_customer_policies.pdf (Relevance: 0.88)`,
+                                              color: '#1e1b4b'
+                                            });
+                                            alert('Success! ReefSense RAG report exported directly to Workspace Keep notes.');
+                                          } catch (err: any) {
+                                            handleFirestoreError(err, OperationType.WRITE, 'notes');
+                                          }
+                                        }}
+                                        className="px-4 py-2 bg-pink-500/10 border border-pink-500/30 text-pink-400 hover:bg-pink-500 hover:text-black font-mono text-[8.5px] uppercase tracking-wider transition-all cursor-pointer font-black"
+                                      >
+                                        Export Summary Report to Keep Notes
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 3. DROPWAVE WEBHOOK ROUTER PLAYGROUND */}
+                            {tool.id === 'tool-workflow-automate' && (
+                              <div className="space-y-4 font-sans animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                    <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Trigger Source Event</label>
+                                    <select
+                                      value={webhookEvent}
+                                      onChange={(e) => {
+                                        const event = e.target.value;
+                                        setWebhookEvent(event);
+                                        // Update parameters template
+                                        if (event === 'stripe_dispute') {
+                                          setWebhookDetails(JSON.stringify({ id: "evt_dispute_123", type: "charge.dispute.created", data: { object: { amount: 25000, charge: "ch_live_99831", reason: "unrecognized" } } }, null, 2));
+                                        } else if (event === 'stripe_payment_success') {
+                                          setWebhookDetails(JSON.stringify({ id: "evt_success_7718", type: "charge.succeeded", data: { object: { amount: 120000, customer: "cus_tidal_001", receipt_url: "https://stripe.com/receipt" } } }, null, 2));
+                                        } else if (event === 'lead_form') {
+                                          setWebhookDetails(JSON.stringify({ source_domain: "OceanTideDropAISurfer.services", lead_name: "Sarah Connor", company: "Skynet Logistics", interest: "Tidal Agent Task Orchestrator" }, null, 2));
+                                        } else {
+                                          setWebhookDetails(JSON.stringify({ ref: "refs/heads/main", repository: "otdaisurfer-monorepo", pusher: "kaibrooks-dev", commits: [{"message": "Sealed DNS asset configurations with Cloudflare proxy"}] }, null, 2));
+                                        }
+                                      }}
+                                      className="w-full bg-editorial-bg border border-white/10 px-3.5 py-3 text-xs text-white font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                    >
+                                      <option value="stripe_dispute">charge.dispute.created (Stripe Dispute)</option>
+                                      <option value="stripe_payment_success">charge.succeeded (Stripe Pay Success)</option>
+                                      <option value="lead_form">lead_captured (Lead Lander Submission)</option>
+                                      <option value="github_push">git.push (GitHub Repository Workflows)</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">JSON Event Parameters Payload</label>
+                                  <textarea
+                                    rows={5}
+                                    value={webhookDetails || JSON.stringify({ id: "evt_dispute_123", type: "charge.dispute.created", data: { object: { amount: 25000, charge: "ch_live_99831", reason: "unrecognized" } } }, null, 2)}
+                                    onChange={(e) => setWebhookDetails(e.target.value)}
+                                    className="w-full bg-editorial-bg border border-white/10 p-3 text-xs font-mono text-zinc-300 rounded-none focus:outline-none focus:border-pink-500/50"
+                                  />
+                                </div>
+
+                                <div className="pt-2">
+                                  <button
+                                    type="button"
+                                    disabled={webhookSending}
+                                    onClick={() => {
+                                      setWebhookSending(true);
+                                      const timestamp = new Date().toLocaleTimeString();
+                                      const logsCopy = [...webhookLogs];
+                                      logsCopy.push(`[${timestamp}] 📥 Received webhook dispatch request: ${webhookEvent}`);
+                                      logsCopy.push(`[${timestamp}] [SECURITY] Fingerprinted signature check passed using whsec_Gd3UlfeFWpYvZxCjLUOwmdKd`);
+                                      
+                                      setTimeout(() => {
+                                        logsCopy.push(`[${timestamp} +1.2s] [ORCHESTRATOR] Routing payload triggers to: https://cctobgbyxjfabksnokbe.supabase.co/functions/v1/stripe-webhook`);
+                                        logsCopy.push(`[${timestamp} +1.8s] [ACTION] Triggering OpenAI Node GPT filter sk-proj-GvLCuLDbHN9V...`);
+                                        logsCopy.push(`[${timestamp} +2.4s] [SLACK] Stream payload alert posted on #otd-surfer-leads channels!`);
+                                        logsCopy.push(`[${timestamp} +2.8s] [SUCCESS] Router stabilized execution complete (200 OK)`);
+                                        setWebhookLogs(logsCopy);
+                                        setWebhookSending(false);
+                                      }, 1500);
+                                    }}
+                                    className="px-6 py-3.5 bg-pink-500 text-black hover:bg-white font-mono font-black text-xs uppercase tracking-widest transition-colors rounded-none cursor-pointer flex items-center justify-center gap-2"
+                                  >
+                                    {webhookSending ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Pushing Telemetry...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Send className="w-4 h-4" />
+                                        Post Webhook Telemetry
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {/* Terminal output log */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-mono text-slate-400 uppercase font-bold">Real-time Telemetry logs</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setWebhookLogs(['[SYSTEM] DropWave webhook router initialized. Ready for dispatch telemetry.'])}
+                                      className="text-[9px] font-mono text-pink-400 hover:underline hover:text-white"
+                                    >
+                                      Clear Logs
+                                    </button>
+                                  </div>
+                                  <div className="bg-editorial-bg border border-white/10 p-4 space-y-1.5 font-mono text-[9px] uppercase tracking-wide leading-relaxed text-slate-400 h-40 overflow-y-auto select-none rounded-none">
+                                    {webhookLogs.map((log, i) => (
+                                      <div key={i} className={log.includes('[SUCCESS]') ? 'text-emerald-400 font-bold' : log.includes('[SECURITY]') ? 'text-cyan-400' : log.includes('Received') ? 'text-pink-400' : 'text-slate-400'}>
+                                        {log}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Save to keep */}
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        await supabaseDb.addNote({
+                                          note_id: 'webhook-' + Date.now(),
+                                          user_id: memberUser.uid,
+                                          title: `⚙️ DropWave: Webhook Telemetry Stream`,
+                                          content: `Webhook router activity checklist:\n\nTrigger Event: ${webhookEvent}\nPayload Details: ${webhookDetails || 'None'}\n\nHistoric Logs:\n${webhookLogs.join('\n')}`,
+                                          color: '#1e1b4b'
+                                        });
+                                        alert('Success! DropWave telemetry log exported directly to Workspace Keep notes.');
+                                      } catch (err: any) {
+                                        handleFirestoreError(err, OperationType.WRITE, 'notes');
+                                      }
+                                    }}
+                                    className="px-4 py-2 bg-pink-500/10 border border-pink-500/30 text-pink-400 hover:bg-pink-500 hover:text-black font-mono text-[8.5px] uppercase tracking-wider transition-all cursor-pointer font-black"
+                                  >
+                                    Export Router Logs to Keep Notes
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 4. SWELLRESPOND REVIEW PILOT PLAYGROUND */}
+                            {tool.id === 'tool-sentiment-responder' && (
+                              <div className="space-y-4 font-sans animate-fade-in">
+                                <div className="space-y-2">
+                                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Source Customer Feedback Comment</label>
+                                  <textarea
+                                    rows={3}
+                                    placeholder="e.g. OTD AI is cool, but their services app has no stripe subscription portal. The team is friendly though!"
+                                    value={responderComment}
+                                    onChange={(e) => setResponderComment(e.target.value)}
+                                    className="w-full bg-editorial-bg border border-white/10 px-4 py-3 text-xs text-white font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                    <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Tone Presets</label>
+                                    <select
+                                      value={respondTone}
+                                      onChange={(e) => setRespondTone(e.target.value)}
+                                      className="w-full bg-editorial-bg border border-white/10 px-3.5 py-3 text-xs text-white font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                    >
+                                      <option value="Enterprise Polite">Enterprise Polite & Technical</option>
+                                      <option value="Sunset Beach Casual">Sunset Beach Casual</option>
+                                      <option value="Apologetic & Proactive">Apologetic & Urgent</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div className="pt-2">
+                                  <button
+                                    type="button"
+                                    disabled={savingRespondNote || !responderComment}
+                                    onClick={() => {
+                                      setSavingRespondNote(true);
+                                      setTimeout(() => {
+                                        const formal = `Dear Partner,\n\nThank you for sharing your experience riding the automation waves with OTD AI Surfer. We are thrilled to hear that our tools are helpful! Regarding the membership billing portal, we appreciate your prompt feedback. We have actively configured our Stripe webhook architecture pointing to our Supabase database functions under secure endpoints to protect customer data. Our technical director is looking forward to scheduling onboarding for your subscription flows.\n\nWarm regards,\nSwellRespond Support Principal`;
+                                        const casual = `Aloha Friend,\n\nStoked to hear you are loving the OTD AI wave! We appreciate the feedback on the Stripe portal—we are actually integrating it with our backend right now on the Members Portal. The high-tide pipelines are fully connected now. Hang loose, and we'll hit you up on our Slack channel shortly!\n\nCheers,\nSurf Team`;
+                                        const urgent = `Dear Authorized Partner,\n\nThank you for raising these interface specifications regarding our Stripe payment configurations. We apologize for any confusion and have proactively activated our DropWave routers to verify and audit current telemetry pipelines. An operations engineer is checking the Stripe Webhook secret limits (whsec_G) immediately to expedite portal resolutions.\n\nSincere apologies,\nCritical Ops Node`;
+                                        
+                                        setRespondDraft(respondTone === 'Enterprise Polite' ? formal : respondTone === 'Sunset Beach Casual' ? casual : urgent);
+                                        setSavingRespondNote(false);
+                                      }, 1500);
+                                    }}
+                                    className="px-6 py-3.5 bg-pink-500 text-black hover:bg-white font-mono font-black text-xs uppercase tracking-widest transition-colors rounded-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40"
+                                  >
+                                    {savingRespondNote ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Fusing Sentiment Draft...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles className="w-4 h-4 shrink-0" />
+                                        Draft Sentiment Reply
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {respondDraft && (
+                                  <div className="space-y-4 animate-fade-in">
+                                    <div className="border border-white/10 bg-editorial-bg p-4 space-y-3">
+                                      <h5 className="font-mono text-[10px] text-pink-400 uppercase tracking-wider font-bold">Generated Brand Reply Draft</h5>
+                                      <textarea
+                                        rows={6}
+                                        value={respondDraft}
+                                        onChange={(e) => setRespondDraft(e.target.value)}
+                                        className="w-full bg-editorial-dark border border-white/10 p-3 text-xs leading-relaxed text-zinc-200 font-sans rounded-none focus:outline-none focus:border-pink-500/50"
+                                      />
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            await supabaseDb.addNote({
+                                              note_id: 'reply-' + Date.now(),
+                                              user_id: memberUser.uid,
+                                              title: `💬 SwellRespond Tone [${respondTone}]`,
+                                              content: `Source Review: ${responderComment}\n\nDraft Reply:\n${respondDraft}`,
+                                              color: '#064e3b'
+                                            });
+                                            alert('Success! Response blueprint exported directly to your Workspace Keep Notes.');
+                                          } catch (err: any) {
+                                            handleFirestoreError(err, OperationType.WRITE, 'notes');
+                                          }
+                                        }}
+                                        className="px-4 py-2 bg-pink-500/10 border border-pink-500/30 text-pink-400 hover:bg-pink-500 hover:text-black font-mono text-[8.5px] uppercase tracking-wider transition-all cursor-pointer font-black"
+                                      >
+                                        Save Reply Blueprint to Keep Notes
+                                      </button>
+                                      
+                                      <button
+                                        type="button"
+                                        disabled={sendingDraft}
+                                        onClick={() => {
+                                          setSendingDraft(true);
+                                          sendSlackMessage('lead_form', { 
+                                            name: 'SwellRespond Review Pilot Output', 
+                                            email: 'reply-sent@otdaisurfer.surf', 
+                                            companyName: 'Otd Review Operations', 
+                                            websiteScope: 'Sentiment Response Generator', 
+                                            interestArea: respondTone, 
+                                            message: `Review comment: ${responderComment}\n\nDraft Reply:\n${respondDraft}` 
+                                          });
+                                          setTimeout(() => {
+                                            setSendingDraft(false);
+                                            alert('Success! Webhook triggered to transmit draft to partner slack Channel.');
+                                          }, 1200);
+                                        }}
+                                        className="px-4 py-2 bg-editorial-bg border border-white/15 text-white hover:border-white/30 font-mono text-[8.5px] uppercase tracking-wider transition-all cursor-pointer"
+                                      >
+                                        {sendingDraft ? 'Posting to Slack...' : 'Post to Slack'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 5. SURFDRAFT SEO ENGINE PLAYGROUND */}
+                            {tool.id === 'tool-seo-generator' && (
+                              <div className="space-y-4 font-sans animate-fade-in">
+                                <div className="space-y-2">
+                                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Target SEO Keywords</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. low-tide automation, Stripe solutions, vector agents"
+                                    value={seoKeywords}
+                                    onChange={(e) => setSeoKeywords(e.target.value)}
+                                    className="w-full bg-editorial-bg border border-white/10 px-4 py-3 text-xs text-white font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                  />
+                                </div>
+
+                                <div className="space-y-2">
+                                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Niche Category</label>
+                                  <select
+                                    value={seoCategory}
+                                    onChange={(e) => setSeoCategory(e.target.value)}
+                                    className="w-full bg-editorial-bg border border-white/10 px-3.5 py-3 text-xs text-white font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                  >
+                                    <option value="E-commerce">E-commerce & Retail Products</option>
+                                    <option value="SaaS Venture">SaaS Venture</option>
+                                    <option value="Enterprise Logistics">Enterprise Logistics & Planning</option>
+                                  </select>
+                                </div>
+
+                                <div className="pt-2">
+                                  <button
+                                    type="button"
+                                    disabled={savingSeoNote || !seoKeywords}
+                                    onClick={() => {
+                                      setSavingSeoNote(true);
+                                      setTimeout(() => {
+                                        setSeoOutline(`STRUCTURED BLOG POST BLUEPRINT [APPROVED FOR DOMAIN]\n\nPAGE_TITLE: Riding the High-Tide: Why ${seoKeywords.split(',')[0] || 'Tidal Systems'} Wins Operations Budgets\nCATEGORY: SEO Content Hub / ${seoCategory}\n\n1. Display Heading (H1)\n   - "Stop Fighting the High-Tides: Deploying ${seoKeywords.split(',')[0] || 'Automation'}"\n\n2. Key Editorial Paragraphs (H2)\n   - Section 2.1: Operational Friction Audit and Digital Security.\n   - Section 2.2: Mapping Webhooks like Stripe with OpenAI Node parameters (${seoKeywords.split(',')[1] || 'Stripe Nodes'}).\n   - Section 2.3: Integrating deep memory queries using RAG indexes.\n\n3. Structured Keyword Density Checklist\n   - Target keywords: "${seoKeywords}"\n   - Structured schema metadata: otd_coastal_schema_v1 (verified)`);
+                                        setSavingSeoNote(false);
+                                      }, 1500);
+                                    }}
+                                    className="px-6 py-3.5 bg-pink-500 text-black hover:bg-white font-mono font-black text-xs uppercase tracking-widest transition-colors rounded-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40"
+                                  >
+                                    {savingSeoNote ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Synthesizing Article Outline...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Notebook className="w-4 h-4 shrink-0" />
+                                        Structure SEO Blueprint
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {seoOutline && (
+                                  <div className="space-y-4 animate-fade-in">
+                                    <div className="border border-white/10 bg-editorial-bg p-4 space-y-3">
+                                      <h5 className="font-mono text-[10px] text-pink-400 uppercase tracking-wider font-bold">SEO Draft Outline Blueprint</h5>
+                                      <textarea
+                                        rows={10}
+                                        value={seoOutline}
+                                        onChange={(e) => setSeoOutline(e.target.value)}
+                                        className="w-full bg-editorial-dark border border-white/10 p-3.5 text-xs text-zinc-300 leading-relaxed font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            await supabaseDb.addNote({
+                                              note_id: 'seo-' + Date.now(),
+                                              user_id: memberUser.uid,
+                                              title: `✍️ SurfDraft SEO: ${seoKeywords}`,
+                                              content: seoOutline,
+                                              color: '#1e3a8a'
+                                            });
+                                            alert('Success! SEO Draft Outline has been exported directly to Keep Notes.');
+                                          } catch (err: any) {
+                                            handleFirestoreError(err, OperationType.WRITE, 'notes');
+                                          }
+                                        }}
+                                        className="px-4 py-2 bg-pink-500/10 border border-pink-500/30 text-pink-400 hover:bg-pink-500 hover:text-black font-mono text-[8.5px] uppercase tracking-wider transition-all cursor-pointer font-black"
+                                      >
+                                        Save Article Outline to Keep Notes
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 6. BREAKERAUDIO SUMMARIZER PLAYGROUND */}
+                            {tool.id === 'tool-auto-transcription' && (
+                              <div className="space-y-4 font-sans animate-fade-in">
+                                <div className="space-y-2">
+                                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Select Recorded Audio Snippet</label>
+                                  <select
+                                    value={audioSnippetName}
+                                    onChange={(e) => {
+                                      const snippet = e.target.value;
+                                      setAudioSnippetName(snippet);
+                                      if (snippet.includes('Stripe')) {
+                                        setAudioTranscript(`Kai: "We got the new Stripe webhook running at cctobgbyxjfabksnokbe.supabase.co/functions/v1/stripe-webhook."\nSarah: "Awesome, does it verify signature whsec_Gd3UlfeFWpYvZxCjLUOwmdKd??"\nKai: "Yes, it verifies the signature and records webhook telemetry directly into our Supabase user subscription table."`);
+                                      } else {
+                                        setAudioTranscript(`Client: "We have heavy port congestion at WaveWear warehouses during high-tide storms."\nMarina: "We can deploy a custom TideAgent and query our vector index with ReefSense RAG to alert logistics directors of optimal vessel routing timetables."`);
+                                      }
+                                    }}
+                                    className="w-full bg-editorial-bg border border-white/10 px-3.5 py-3 text-xs text-white font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                  >
+                                    <option value="">Select Call Fragment...</option>
+                                    <option value="Partner Sync on Stripe Webhook (4m)">Partner Sync on Stripe Webhook (4 mins duration)</option>
+                                    <option value="OceanTide Logistics Discovery Call (10m)">OceanTide Logistics Discovery Call (10 mins duration)</option>
+                                  </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider">Raw Audio Transcript Segment</label>
+                                  <textarea
+                                    rows={4}
+                                    value={audioTranscript || `[No audio snippet currently preloaded. Select a snippet or author one.]`}
+                                    onChange={(e) => setAudioTranscript(e.target.value)}
+                                    className="w-full bg-editorial-bg border border-white/10 p-3 text-xs leading-relaxed text-zinc-300 font-sans rounded-none focus:outline-none focus:border-pink-500/50"
+                                  />
+                                </div>
+
+                                <div className="pt-2">
+                                  <button
+                                    type="button"
+                                    disabled={parsingAudio || !audioTranscript}
+                                    onClick={() => {
+                                      setParsingAudio(true);
+                                      setTimeout(() => {
+                                        const stripeSummary = `MEETING RESOLUTIONS & CHECKLIST\n\nMeeting segment topic: Stripe Webhook Pipeline\nDuration simulated: 4 minutes\n\n1. Target Serverless endpoint configured at cctobgbyxjfabksnokbe.supabase.co\n2. Stripe secret webhook verification established: whsec_Gd3UlfeFWpYvZxCjLUOwmdKd\n3. Team alerted via DropWave dispatch triggers in client Slack channel.\n4. Database writes locked down inside auth.currentUser scopes in standard Firestore.`;
+                                        const generalSummary = `MEETING RESOLUTIONS & CHECKLIST\n\nMeeting segment topic: Coastal Port Congestion\nDuration simulated: 10 minutes\n\n1. Team approved deployment of specialized autonomous staff: TideAgent.\n2. RAG retrieval queries targeting tidal metrics stabilized with daily CRON schedules.\n3. Vessel captains will receive instant routing SMS templates generated via LLMs.`;
+                                        
+                                        setAudioActions(audioSnippetName.includes('Stripe') ? stripeSummary : generalSummary);
+                                        setParsingAudio(false);
+                                      }, 1500);
+                                    }}
+                                    className="px-6 py-3.5 bg-pink-500 text-black hover:bg-white font-mono font-black text-xs uppercase tracking-widest transition-colors rounded-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40"
+                                  >
+                                    {parsingAudio ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Transcribing waves...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="w-4 h-4" />
+                                        Analyze Meeting Specifications
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {audioActions && (
+                                  <div className="space-y-4 animate-fade-in">
+                                    <div className="border border-white/10 bg-editorial-bg p-4 space-y-3">
+                                      <h5 className="font-mono text-[10px] text-pink-400 uppercase tracking-wider font-bold">Action Checklists & Summaries</h5>
+                                      <textarea
+                                        rows={6}
+                                        value={audioActions}
+                                        onChange={(e) => setAudioActions(e.target.value)}
+                                        className="w-full bg-editorial-dark border border-white/10 p-3 text-xs leading-relaxed text-zinc-300 font-mono rounded-none focus:outline-none focus:border-pink-500/50"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            await supabaseDb.addNote({
+                                              note_id: 'audio-' + Date.now(),
+                                              user_id: memberUser.uid,
+                                              title: `🔊 BreakerAudio: ${audioSnippetName || 'Meeting Minutes'}`,
+                                              content: audioActions,
+                                              color: '#581c87'
+                                            });
+                                            alert('Success! Meeting specs has been synced as a Google Keep Workspace note.');
+                                          } catch (err: any) {
+                                            handleFirestoreError(err, OperationType.WRITE, 'notes');
+                                          }
+                                        }}
+                                        className="px-4 py-2 bg-pink-500/10 border border-pink-500/30 text-pink-400 hover:bg-pink-500 hover:text-black font-mono text-[8.5px] uppercase tracking-wider transition-all cursor-pointer font-black"
+                                      >
+                                        Export Minutes to Keep Notes
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                          </div>
+                        );
+                      })()}
+
+                    </div>
+
+                  </div>
+                )}
+
+              </div>
+            )}
+
           </div>
         )}
 

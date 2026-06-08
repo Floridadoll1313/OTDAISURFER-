@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.env.local
+.git
+.github
+npm-debug.log
+Dockerfile
+.dockerignore
+firebase-applet-config.json
+firebase-blueprint.json
+firestore.rules
